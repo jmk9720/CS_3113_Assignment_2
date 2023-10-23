@@ -48,16 +48,18 @@ const char V_SHADER_PATH[] = "shaders/vertex_textured.glsl",
            F_SHADER_PATH[] = "shaders/fragment_textured.glsl";
 
 const float MILLISECONDS_IN_SECONDS = 1000.0f;
-const float MINIMUM_COLLISION_DISTANCE = 1.0f;
 
 const int NUMBER_OF_TEXTURES = 1;
 const GLint LEVEL_OF_DETAIL = 0;
 const GLint TEXTURE_BORDER = 0;
 
-const char PLAYER_SPRITE_FILEPATH[] = "/Users/jonathankim/Desktop/2023 Fall/CS 3113/Project 1/CS_3113_Assignment_2/CS 3113 Project 2/CS 3113 Project 2/player1.png";
-const char OTHER_SPRITE_FILEPATH[] = "/Users/jonathankim/Desktop/2023 Fall/CS 3113/Project 1/CS_3113_Assignment_2/CS 3113 Project 2/CS 3113 Project 2/player2.png";
-const char BALL_SPRITE_FILEPATH[] = "/Users/jonathankim/Desktop/2023 Fall/CS 3113/Project 1/CS_3113_Assignment_2/CS 3113 Project 2/CS 3113 Project 2/ball.png";
-const char ITEM_SPRITE_FILEPATH[] = "/Users/jonathankim/Desktop/2023 Fall/CS 3113/Project 1/CS_3113_Assignment_2/CS 3113 Project 2/CS 3113 Project 2/item.png";
+const int FONTBANK_SIZE = 16;
+
+const char PLAYER_SPRITE_FILEPATH[] = "/Users/jonathankim/Desktop/2023 Fall/CS 3113/Project 2/CS_3113_Assignment_2/CS 3113 Project 2/CS 3113 Project 2/player1.png";
+const char OTHER_SPRITE_FILEPATH[] = "/Users/jonathankim/Desktop/2023 Fall/CS 3113/Project 2/CS_3113_Assignment_2/CS 3113 Project 2/CS 3113 Project 2/player2.png";
+const char BALL_SPRITE_FILEPATH[] = "/Users/jonathankim/Desktop/2023 Fall/CS 3113/Project 2/CS_3113_Assignment_2/CS 3113 Project 2/CS 3113 Project 2/ball.png";
+const char ITEM_SPRITE_FILEPATH[] = "/Users/jonathankim/Desktop/2023 Fall/CS 3113/Project 2/CS_3113_Assignment_2/CS 3113 Project 2/CS 3113 Project 2/item.png";
+const char TEXT_SPRITE_FILEPATH[] = "/Users/jonathankim/Desktop/2023 Fall/CS 3113/Project 2/CS_3113_Assignment_2/CS 3113 Project 2/CS 3113 Project 2/font1.png";
 
 SDL_Window* g_display_window;
 
@@ -182,6 +184,9 @@ void initialize() {
     g_item_matrix = glm::translate(g_item_matrix, glm::vec3(10.0f, 10.0f, 0.0f));
     g_item_matrix = glm::scale(g_item_matrix, ITEM_INIT_SCALE);
     
+    g_text_matrix = glm::mat4(1.0f);
+    g_text_matrix = glm::translate(g_text_matrix, glm::vec3(-2.0f, 0.0f, 0.0f));
+    
     g_shader_program.SetProjectionMatrix(g_projection_matrix);
     g_shader_program.SetViewMatrix(g_view_matrix);
     
@@ -193,6 +198,7 @@ void initialize() {
     other_texture_id = load_texture(OTHER_SPRITE_FILEPATH);
     ball_texture_id = load_texture(BALL_SPRITE_FILEPATH);
     item_texture_id = load_texture(ITEM_SPRITE_FILEPATH);
+    text_texture_id = load_texture(TEXT_SPRITE_FILEPATH);
     
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -264,18 +270,22 @@ void process_input() {
     }
 }
 
-bool check_collision(glm::vec3 &position_a, glm::vec3 &position_b) {
-    float x_distance = fabs(position_a.x - position_b.x) - ((BALL_DIMENSION + PLAYER_WIDTH) / 2.0f);
-    float y_distance = fabs(position_a.y - position_b.y) - ((BALL_DIMENSION + PLAYER_HEIGHT) / 2.0f);
+// Checks the collision of the ball and the paddles
+bool check_collision(glm::vec3 &position_a, glm::vec3 &position_b, glm::vec3 &scale) {
+    float x_distance = fabs(position_a.x - position_b.x) - ((BALL_DIMENSION + scale.x) / 2.0f);
+    float y_distance = fabs(position_a.y - position_b.y) - ((BALL_DIMENSION + scale.y) / 2.0f);
     return x_distance <= 0 && y_distance <= 0;
 }
 
+// Checks the collision of the item and the ball.
 bool item_collision(glm::vec3 &position_a, glm::vec3 &position_b) {
     float x_distance = fabs(position_a.x - position_b.x) - ((BALL_DIMENSION + ITEM_DIMENSION) / 2.0f);
     float y_distance = fabs(position_a.y - position_b.y) - ((BALL_DIMENSION + ITEM_DIMENSION) / 2.0f);
     return x_distance <= 0 && y_distance <= 0;
 }
 
+// Randomly generates an unsigned float for x and y coordinates. If the coordinate
+// is not within the game scene, it will return the initial position of the item object.
 glm::vec3 rand_coord() {
     float x_coord = (float) ((rand() % 500) - 250) / (float) ((rand() % 400) - 200);
     float y_coord = (float) ((rand() % 500) - 250) / (float) ((rand() % 400) - 200);
@@ -288,6 +298,10 @@ glm::vec3 rand_coord() {
     return glm::vec3(x_coord, y_coord, 0.0f);
 }
 
+// Randomly chooses a number between 0 and 499. If it lands on 1, it will
+// position the item on the coordinate that was randomly generated. If
+// the random coordinate is not on the screen, then it will skip the turn
+// and randomly generate another number.
 void generate_item() {
     int random = rand() % 500;
     if (random == 1) {
@@ -303,96 +317,112 @@ void generate_item() {
 }
 
 void update() {
-    float ticks = (float) SDL_GetTicks() / MILLISECONDS_IN_SECONDS;
-    float delta_time = ticks - g_previous_ticks;
-    g_previous_ticks = ticks;
-    
-    if(g_ball_position.y >= 3.65f and collision == false) {
-        g_ball_movement.y *= -1.0f;
-        collision = true;
-    }
-    if (g_ball_position.y <= -3.65f and collision == false) {
-        g_ball_movement.y *= -1.0f;
-        collision = true;
-    }
-    if (g_ball_position.y <= 3.6f and g_ball_position.y >= -3.6f) {
-        collision = false;
-    }
-    
-    if (gen_item == true) {
-        generate_item();
-        if (g_item_position.x != 10.0f) {
-            gen_item = false;
+    if (game_over == false) {
+        float ticks = (float) SDL_GetTicks() / MILLISECONDS_IN_SECONDS;
+        float delta_time = ticks - g_previous_ticks;
+        g_previous_ticks = ticks;
+        
+        // Wall bounce -- Only want the collision to happen once; therefore, the collision bool
+        if(g_ball_position.y >= 3.65f and collision == false) {
+            g_ball_movement.y *= -1.0f;
+            collision = true;
         }
-    }
-    
-    if (item_collision(g_ball_position, g_item_position) and scale_bool == true) {
-        g_item_matrix = glm::mat4(1.0f);
-        g_item_position = glm::vec3(10.0f, 10.0f, 0.0f);
-        g_item_matrix = glm::translate(g_item_matrix, g_item_position);
-        if (g_ball_movement.x < 0) {
-            if (OTHER_SCALE.y <= 1.4f) {
-                OTHER_SCALE.y += 0.2f;
-                PLAYER_SCALE.y -= 0.2f;
+        if (g_ball_position.y <= -3.65f and collision == false) {
+            g_ball_movement.y *= -1.0f;
+            collision = true;
+        }
+        if (g_ball_position.y <= 3.6f and g_ball_position.y >= -3.6f) {
+            collision = false;
+        }
+        
+        // Item Generate -- Only generate when item is not on the game plane
+        // Once the item is generated, don't generate more
+        if (gen_item == true) {
+            generate_item();
+            if (g_item_position.x != 10.0f) {
+                gen_item = false;
             }
         }
-        else if (g_ball_movement.x > 0) {
-            if (OTHER_SCALE.y <= 1.4f) {
-                PLAYER_SCALE.y += 0.2f;
-                OTHER_SCALE.y -= 0.2f;
+        
+        // Item Collision -- When the ball collides with the item sprite, it gives
+        // effects. Depends on which paddle hit last.
+        if (item_collision(g_ball_position, g_item_position) and scale_bool == true) {
+            g_item_matrix = glm::mat4(1.0f);
+            g_item_position = glm::vec3(10.0f, 10.0f, 0.0f);
+            g_item_matrix = glm::translate(g_item_matrix, g_item_position);
+            if (g_ball_movement.x < 0) {
+                if (OTHER_SCALE.y <= 1.4f) {
+                    OTHER_SCALE.y += 0.2f;
+                    PLAYER_SCALE.y -= 0.2f;
+                }
             }
+            else if (g_ball_movement.x > 0) {
+                if (OTHER_SCALE.y <= 1.4f) {
+                    PLAYER_SCALE.y += 0.2f;
+                    OTHER_SCALE.y -= 0.2f;
+                }
+            }
+            gen_item = true;
+            scale_bool = false;
         }
-        cout << "PLAYER SCALE: " << PLAYER_SCALE.y << endl;
-        cout << "OTHER SCALE: " << OTHER_SCALE.y << endl;
-        gen_item = true;
-        scale_bool = false;
-    }
-    if (check_collision(g_ball_position, g_player_position)) {
-        glm::vec3 direction = glm::vec3(0.2f, g_ball_position.y - g_player_position.y, 0.0f);
-        g_ball_movement = glm::normalize(direction);
-        if (g_ball_speed <= 10.0f) g_ball_speed += 0.1f;
-        if (g_player_speed <= 5.0f) g_player_speed += 0.05f;
-    }
-    if (check_collision(g_ball_position, g_other_position)) {
-        glm::vec3 direction = glm::vec3(-0.2f, g_ball_position.y - g_other_position.y, 0.0f);
-        g_ball_movement = glm::normalize(direction);
-        if (g_ball_speed <= 10.0f) g_ball_speed += 0.1f;
-        if (g_player_speed <= 5.0f) g_player_speed += 0.05f;
-    }
-    
-    
-    g_player_position += g_player_movement * g_player_speed * delta_time;
-    g_player_matrix = glm::mat4(1.0f);
-    g_player_matrix = glm::translate(g_player_matrix, g_player_position);
-    g_player_matrix = glm::scale(g_player_matrix, PLAYER_SCALE);
-    
-    if (single_player == false) {
-        g_other_position += g_other_movement * g_player_speed * delta_time;
-        g_other_matrix = glm::mat4(1.0f);
-        g_other_matrix = glm::translate(g_other_matrix, g_other_position);
-        g_other_matrix = glm::scale(g_other_matrix, OTHER_SCALE);
-    }
-    else {
-        if (g_ball_position.y > g_other_position.y and g_other_position.y <= 3.25f) {
-            g_other_movement.y = 1.0f;
+        
+        // Paddle-Ball Collision -- Ball bounces off the paddle based on the vector
+        // direction of the position of the ball and the paddle.
+        // When the ball hits the paddle, the speed of the player and the ball increases.
+        if (check_collision(g_ball_position, g_player_position, PLAYER_SCALE)) {
+            glm::vec3 direction = glm::vec3(0.2f, g_ball_position.y - g_player_position.y, 0.0f);
+            g_ball_movement = glm::normalize(direction);
+            if (g_ball_speed <= 10.0f) g_ball_speed += 0.1f;
+            if (g_player_speed <= 5.0f) g_player_speed += 0.05f;
         }
-        else if(g_ball_position.y < g_other_position.y and g_other_position.y >= -3.25f) {
-            g_other_movement.y = -1.0f;
+        if (check_collision(g_ball_position, g_other_position, PLAYER_SCALE)) {
+            glm::vec3 direction = glm::vec3(-0.2f, g_ball_position.y - g_other_position.y, 0.0f);
+            g_ball_movement = glm::normalize(direction);
+            if (g_ball_speed <= 10.0f) g_ball_speed += 0.1f;
+            if (g_player_speed <= 5.0f) g_player_speed += 0.05f;
         }
-        g_other_position += g_other_movement * g_player_speed * delta_time;
-        g_other_matrix = glm::mat4(1.0f);
-        g_other_matrix = glm::translate(g_other_matrix, g_other_position);
-        g_other_matrix = glm::scale(g_other_matrix, OTHER_SCALE);
-    }
-    
-    if (g_ball_position.x <= 4.9f and g_ball_position.x >= -4.9f) {
-        g_ball_position += g_ball_movement * g_ball_speed * delta_time;
-        g_ball_matrix = glm::mat4(1.0f);
-        g_ball_matrix = glm::translate(g_ball_matrix, g_ball_position);
-        g_ball_matrix = glm::scale(g_ball_matrix, BALL_INIT_SCALE);
-    }
-    else {
-        game_over = true;;
+        
+        // Player 1 movement
+        g_player_position += g_player_movement * g_player_speed * delta_time;
+        g_player_matrix = glm::mat4(1.0f);
+        g_player_matrix = glm::translate(g_player_matrix, g_player_position);
+        g_player_matrix = glm::scale(g_player_matrix, PLAYER_SCALE);
+        
+        // Player 2 movement
+        if (single_player == false) {
+            g_other_position += g_other_movement * g_player_speed * delta_time;
+            g_other_matrix = glm::mat4(1.0f);
+            g_other_matrix = glm::translate(g_other_matrix, g_other_position);
+            g_other_matrix = glm::scale(g_other_matrix, OTHER_SCALE);
+        }
+        
+        // Single Player mode -- follows the y position of the ball.
+        else {
+            if (g_ball_position.y > g_other_position.y and g_other_position.y <= 3.75 - OTHER_SCALE.y / 2) {
+                g_other_movement.y = 1.0f;
+            }
+            else if(g_ball_position.y < g_other_position.y and g_other_position.y >= -3.75f + OTHER_SCALE.y / 2) {
+                g_other_movement.y = -1.0f;
+            }
+            g_other_position += g_other_movement * g_player_speed * delta_time;
+            g_other_matrix = glm::mat4(1.0f);
+            g_other_matrix = glm::translate(g_other_matrix, g_other_position);
+            g_other_matrix = glm::scale(g_other_matrix, OTHER_SCALE);
+        }
+        
+        // Ball movement until game is over
+        if (g_ball_position.x <= 4.9f and g_ball_position.x >= -4.9f) {
+            g_ball_position += g_ball_movement * g_ball_speed * delta_time;
+            g_ball_matrix = glm::mat4(1.0f);
+            g_ball_matrix = glm::translate(g_ball_matrix, g_ball_position);
+            g_ball_matrix = glm::scale(g_ball_matrix, BALL_INIT_SCALE);
+        }
+        
+        // Game is over if the ball position is at the left-most or right-most side
+        // of the screen.
+        else {
+            game_over = true;
+        }
     }
 }
 
@@ -402,7 +432,7 @@ void draw_object(glm::mat4 &object_model_matrix, GLuint &object_texture_id) {
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
-void DrawText(ShaderProgram *program, GLuint font_texture_id, std::string text, float screen_size, float spacing, glm::vec3 position)
+void DrawText(ShaderProgram *program, GLuint font_texture_id, string text, float screen_size, float spacing, glm::vec3 position)
 {
     // Scale the size of the fontbank in the UV-plane
     // We will use this for spacing and positioning
@@ -411,8 +441,8 @@ void DrawText(ShaderProgram *program, GLuint font_texture_id, std::string text, 
 
     // Instead of having a single pair of arrays, we'll have a series of pairs—one for each character
     // Don't forget to include <vector>!
-    std::vector<float> vertices;
-    std::vector<float> texture_coordinates;
+    vector<float> vertices;
+    vector<float> texture_coordinates;
 
     // For every character...
     for (int i = 0; i < text.size(); i++) {
@@ -447,21 +477,21 @@ void DrawText(ShaderProgram *program, GLuint font_texture_id, std::string text, 
 
     // 4. And render all of them using the pairs
     glm::mat4 model_matrix = glm::mat4(1.0f);
-    model_matrix = glm::translate(model_matrix, position);
+    g_text_matrix = glm::translate(g_text_matrix, position);
     
-    program->set_model_matrix(model_matrix);
-    glUseProgram(program->get_program_id());
+    program->SetModelMatrix(g_text_matrix);
+    glUseProgram(program->programID);
     
-    glVertexAttribPointer(program->get_position_attribute(), 2, GL_FLOAT, false, 0, vertices.data());
-    glEnableVertexAttribArray(program->get_position_attribute());
-    glVertexAttribPointer(program->get_tex_coordinate_attribute(), 2, GL_FLOAT, false, 0, texture_coordinates.data());
-    glEnableVertexAttribArray(program->get_tex_coordinate_attribute());
+    glVertexAttribPointer(program->positionAttribute, 2, GL_FLOAT, false, 0, vertices.data());
+    glEnableVertexAttribArray(program->positionAttribute);
+    glVertexAttribPointer(program->texCoordAttribute, 2, GL_FLOAT, false, 0, texture_coordinates.data());
+    glEnableVertexAttribArray(program->texCoordAttribute);
     
     glBindTexture(GL_TEXTURE_2D, font_texture_id);
     glDrawArrays(GL_TRIANGLES, 0, (int) (text.size() * 6));
     
-    glDisableVertexAttribArray(program->get_position_attribute());
-    glDisableVertexAttribArray(program->get_tex_coordinate_attribute());
+    glDisableVertexAttribArray(program->positionAttribute);
+    glDisableVertexAttribArray(program->texCoordAttribute);
 }
 
 void render() {
@@ -489,6 +519,9 @@ void render() {
     draw_object(g_other_matrix, other_texture_id);
     draw_object(g_item_matrix, item_texture_id);
     draw_object(g_ball_matrix, ball_texture_id);
+    if (game_over == true) {
+        DrawText(&g_shader_program, text_texture_id, "GAME OVER!", 0.5f, 0.01f, glm::vec3(0.0f, 0.0f, 0.0f));
+    }
     
     glDisableVertexAttribArray(g_shader_program.positionAttribute);
     glDisableVertexAttribArray(g_shader_program.texCoordAttribute);
@@ -502,7 +535,7 @@ void shutdown() {
 
 int main(int argc, const char * argv[]) {
     initialize();
-    srand(time_t(NULL));
+    srand(time_t(NULL)); // For generating pseudo-random number from seeds
     
     while (g_game_is_running) {
         process_input();

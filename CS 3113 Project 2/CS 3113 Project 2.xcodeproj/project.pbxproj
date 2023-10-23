@@ -47,7 +47,7 @@
 		90B60DB82AE4702000CCE809 /* player2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = player2.png; sourceTree = "<group>"; };
 		90B60DB92AE47CE800CCE809 /* ball.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ball.png; sourceTree = "<group>"; };
 		90B6870A2AE5FB1D002B3ACA /* item.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = item.png; sourceTree = "<group>"; };
-		90B6870B2AE60FD1002B3ACA /* font1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = font1.png; sourceTree = "<group>"; };
+		90B6870C2AE614D6002B3ACA /* font1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = font1.png; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,7 +95,7 @@
 				905C63E02AE289F600E3C31E /* shaders */,
 				905C63DC2AE289F500E3C31E /* stb_image.h */,
 				905C63D42AE2896700E3C31E /* main.cpp */,
-				90B6870B2AE60FD1002B3ACA /* font1.png */,
+				90B6870C2AE614D6002B3ACA /* font1.png */,
 				90B6870A2AE5FB1D002B3ACA /* item.png */,
 			);
 			path = "CS 3113 Project 2";
